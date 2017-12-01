@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -14,7 +15,7 @@ using System.Xml;
 #endregion
 
 // S	TODO: output only the last plate (in case of detecting 1+ plate in the pic)
-//	TODO: any-case latin -> low-case cyrillic
+// S	TODO: any-case latin -> lowercase cyrillic
 //	TODO: choose root directory and scan all the subdirectories and call "PlateReader" for each file
 //	TODO: save data to the scan_data.csv: pic_no, plate, root_dir, sub_dir\sub_dir2\...
 // S	TODO: if plate has any "?" marks, then append an "!"-mark to the end of the plate
@@ -24,6 +25,22 @@ namespace ZPlateReader
 {
 	public partial class Form1 : Form
 	{
+		private static readonly Dictionary< string, string > _latin_converter = new Dictionary< string, string >( StringComparer.OrdinalIgnoreCase )
+		{
+			{ "A", "а" },
+			{ "B", "б" },
+			{ "C", "с" },
+			{ "E", "е" },
+			{ "H", "н" },
+			{ "K", "к" },
+			{ "M", "м" },
+			{ "O", "о" },
+			{ "P", "р" },
+			{ "T", "т" },
+			{ "X", "х" },
+			{ "Y", "у" }
+		};
+
 		private struct ANPR_OPTIONS
 		{
 			public int min_plate_size; // Минимальная площадь номера
@@ -45,14 +62,14 @@ namespace ZPlateReader
 		{
 			InitializeComponent();
 
-			button_scan_dir.Click += ( sender, args ) => readPlate();
+			button_scan_dir.Click += ( sender, args ) => readPlate( "D:\\1 000.jpg" );
 		}
 
-		private static void readPlate()
+		private static void readPlate( string plate_file_path )
 		{
 			try
 			{
-				using ( var stream = File.OpenRead( "D:\\1 000.jpg" ) )
+				using ( var stream = File.OpenRead( plate_file_path ) )
 				{
 					var size = ( int ) stream.Length;
 					var buffer = new byte[ size ];
@@ -89,21 +106,28 @@ namespace ZPlateReader
 						{
 							reader.ReadToFollowing( "number" );
 							reader.MoveToFirstAttribute();
-						}	// left only the last one
+						} // left only the last one
 
-						var plate = !string.IsNullOrWhiteSpace( reader.Value )
+						var plate = ( !string.IsNullOrWhiteSpace( reader.Value )
 							? reader.Value.Substring( 0, reader.Value.LastIndexOf( ':' ) )
-							: "";	// read only plate data
-						plate += plate.Any( chr => chr == '?' ) ? "!" : "";	// add "!"-mark if necessarry
+							: "" ); // read only plate data
+						plate += plate.Any( chr => chr == '?' ) ? "!" : ""; // add "!"-mark if necessarry
 
 						Console.WriteLine( plate );
+						Console.WriteLine( latinToCyrillic( plate ) );
 					}
 				}
 			}
 			catch ( Exception exception )
 			{
-				MessageBox.Show( @"Something reaaaally bad happened.." + Environment.NewLine + exception.Message, @".//Error", MessageBoxButtons.OK, MessageBoxIcon.Error );
+				MessageBox.Show( @"Something reaaaally bad happened with file:" + Environment.NewLine + exception.Message, @".//Error", MessageBoxButtons.OK, MessageBoxIcon.Error );
 			}
 		}
+
+		private static string latinToCyrillic( string lating_string ) =>
+			string.Concat( lating_string.ToUpper()
+				.Select( chr => ( _latin_converter.ContainsKey( chr.ToString() )
+					? _latin_converter[ chr.ToString() ]
+					: chr.ToString() ) ) );
 	}
 }
