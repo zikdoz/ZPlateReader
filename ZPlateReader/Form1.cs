@@ -1,16 +1,24 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using System.Xml;
 
+#region [ Code Inspection ]
+
+// ReSharper disable InconsistentNaming
+#pragma warning disable 414
+
+#endregion
+
 // S	TODO: output only the last plate (in case of detecting 1+ plate in the pic)
-//	TODO: latin -> cyrillic
+//	TODO: any-case latin -> low-case cyrillic
 //	TODO: choose root directory and scan all the subdirectories and call "PlateReader" for each file
-//	TODO: save data to the scan_data.csv: pic_no, plate, root_dir, sub_dir
-//	TODO: if plate has any "?" marks, then append an "!"-mark to the end of the plate
-//	TODO: if nothing was read - print plate as empty
+//	TODO: save data to the scan_data.csv: pic_no, plate, root_dir, sub_dir\sub_dir2\...
+// S	TODO: if plate has any "?" marks, then append an "!"-mark to the end of the plate
+// S	TODO: if nothing was read - print plate as empty
 
 namespace ZPlateReader
 {
@@ -36,61 +44,65 @@ namespace ZPlateReader
 		public Form1()
 		{
 			InitializeComponent();
+
+			button_scan_dir.Click += ( sender, args ) => readPlate();
 		}
 
-		private void button_test_Click( object sender, EventArgs e )
+		private static void readPlate()
 		{
-			if ( openFileDialog_main.ShowDialog() == DialogResult.OK )
+			try
 			{
-				try
+				using ( var stream = File.OpenRead( "D:\\1 000.jpg" ) )
 				{
-					using ( var stream = openFileDialog_main.OpenFile() )
+					var size = ( int ) stream.Length;
+					var buffer = new byte[ size ];
+
+					using ( var memory_stream = new MemoryStream() )
 					{
-						var size = ( int ) stream.Length;
-						var buffer = new byte[ size ];
+						int temp;
 
-						using ( var memory_stream = new MemoryStream() )
+						while ( ( temp = stream.Read( buffer, 0, buffer.Length ) ) > 0 )
+							memory_stream.Write( buffer, 0, temp );
+					}
+
+					var anpr_options = new ANPR_OPTIONS
+					{
+						Detect_Mode = 14,
+						min_plate_size = 500,
+						max_plate_size = 25000,
+						max_text_size = 20,
+						type_number = 0,
+						flags = 7
+					};
+
+					var buffer_builder = new StringBuilder( 10000 );
+					int[] size_builder = { 10000 };
+
+					anprPlateMemoryXML( buffer, size, anpr_options, buffer_builder, size_builder );
+
+					using ( var reader = XmlReader.Create( new StringReader( buffer_builder.ToString() ) ) )
+					{
+						reader.ReadToFollowing( "allnumbers" );
+						reader.MoveToFirstAttribute();
+
+						for ( int i = 0, end = int.Parse( reader.Value ); i < end; ++i )
 						{
-							int temp;
-
-							while ( ( temp = stream.Read( buffer, 0, buffer.Length ) ) > 0 )
-								memory_stream.Write( buffer, 0, temp );
-						}
-
-						var anpr_options = new ANPR_OPTIONS
-						{
-							Detect_Mode = 14,
-							min_plate_size = 500,
-							max_plate_size = 25000,
-							max_text_size = 20,
-							type_number = 0,
-							flags = 7
-						};
-
-						var buffer_builder = new StringBuilder( 10000 );
-						int[] size_builder = { 10000 };
-
-						anprPlateMemoryXML( buffer, size, anpr_options, buffer_builder, size_builder );
-
-						using ( var reader = XmlReader.Create( new StringReader( buffer_builder.ToString() ) ) )
-						{
-							reader.ReadToFollowing( "allnumbers" );
+							reader.ReadToFollowing( "number" );
 							reader.MoveToFirstAttribute();
+						}	// left only the last one
 
-							for ( int i = 0, end = int.Parse( reader.Value ); i < end; ++i )
-							{
-								reader.ReadToFollowing( "number" );
-								reader.MoveToFirstAttribute();
-							}
+						var plate = !string.IsNullOrWhiteSpace( reader.Value )
+							? reader.Value.Substring( 0, reader.Value.LastIndexOf( ':' ) )
+							: "";	// read only plate data
+						plate += plate.Any( chr => chr == '?' ) ? "!" : "";	// add "!"-mark if necessarry
 
-							Console.WriteLine( reader.Value.Substring( 0, reader.Value.LastIndexOf( ':' ) ) );
-						}
+						Console.WriteLine( plate );
 					}
 				}
-				catch ( Exception exception )
-				{
-					MessageBox.Show( @"Something reaaaally bad happened.." + Environment.NewLine + exception.Message, @".//Error", MessageBoxButtons.OK, MessageBoxIcon.Error );
-				}
+			}
+			catch ( Exception exception )
+			{
+				MessageBox.Show( @"Something reaaaally bad happened.." + Environment.NewLine + exception.Message, @".//Error", MessageBoxButtons.OK, MessageBoxIcon.Error );
 			}
 		}
 	}
