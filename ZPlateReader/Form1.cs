@@ -5,6 +5,13 @@ using System.Text;
 using System.Windows.Forms;
 using System.Xml;
 
+// S	TODO: output only the last plate (in case of detecting 1+ plate in the pic)
+//	TODO: latin -> cyrillic
+//	TODO: choose root directory and scan all the subdirectories and call "PlateReader" for each file
+//	TODO: save data to the scan_data.csv: pic_no, plate, root_dir, sub_dir
+//	TODO: if plate has any "?" marks, then append an "!"-mark to the end of the plate
+//	TODO: if nothing was read - print plate as empty
+
 namespace ZPlateReader
 {
 	public partial class Form1 : Form
@@ -74,15 +81,15 @@ namespace ZPlateReader
 							{
 								reader.ReadToFollowing( "number" );
 								reader.MoveToFirstAttribute();
-
-								Console.WriteLine( reader.Value );
 							}
+
+							Console.WriteLine( reader.Value.Substring( 0, reader.Value.LastIndexOf( ':' ) ) );
 						}
 					}
 				}
 				catch ( Exception exception )
 				{
-					MessageBox.Show( "Something reaaaally bad happened.." + Environment.NewLine + exception.Message, @".//Error", MessageBoxButtons.OK, MessageBoxIcon.Error );
+					MessageBox.Show( @"Something reaaaally bad happened.." + Environment.NewLine + exception.Message, @".//Error", MessageBoxButtons.OK, MessageBoxIcon.Error );
 				}
 			}
 		}
