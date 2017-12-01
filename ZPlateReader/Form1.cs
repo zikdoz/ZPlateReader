@@ -63,7 +63,7 @@ namespace ZPlateReader
 						var buffer_builder = new StringBuilder( 10000 );
 						int[] size_builder = { 10000 };
 
-						var very_temp = anprPlateMemoryXML( buffer, size, anpr_options, buffer_builder, size_builder );
+						anprPlateMemoryXML( buffer, size, anpr_options, buffer_builder, size_builder );
 
 						using ( var reader = XmlReader.Create( new StringReader( buffer_builder.ToString() ) ) )
 						{
