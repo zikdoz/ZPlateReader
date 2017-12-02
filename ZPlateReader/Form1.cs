@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -15,13 +16,6 @@ using Microsoft.WindowsAPICodePack.Dialogs;
 #pragma warning disable 414
 
 #endregion
-
-// S	TODO: output only the last plate (in case of detecting 1+ plate in the pic)
-// S	TODO: any-case latin -> lowercase cyrillic
-// S	TODO: choose a root directory and scan all the subdirectories and call "readPlate" for each file
-//	TODO: save data to the scan_data.csv: pic_no, plate, root_dir, sub_dir\sub_dir2\...
-// S	TODO: if plate has any "?" marks, then append an "!"-mark to the end of the plate
-// S	TODO: if nothing was read - print plate as empty
 
 namespace ZPlateReader
 {
@@ -50,6 +44,8 @@ namespace ZPlateReader
 			EnsurePathExists = true
 		};
 
+		private static StreamWriter data_writer;
+
 		private struct ANPR_OPTIONS
 		{
 			public int min_plate_size; // Минимальная площадь номера
@@ -71,11 +67,31 @@ namespace ZPlateReader
 		{
 			InitializeComponent();
 
+			Shown += ( sender, args ) => init();
+		}
+
+		private void init()
+		{
+			backgroundWorker_main.DoWork += ( sender, args ) => scanDir( _folder_selector.FileName );
+
+			backgroundWorker_main.RunWorkerCompleted += ( sender, args ) =>
+			{
+				Cursor = Cursors.Default;
+				button_scan_dir.ResetBackColor();
+				button_scan_dir.Enabled = true;
+			};
+
 			button_scan_dir.Click += ( sender, args ) =>
 			{
 				if ( _folder_selector.ShowDialog() == CommonFileDialogResult.Ok )
 					if ( !string.IsNullOrWhiteSpace( _folder_selector.FileName ) )
-						scanDir( _folder_selector.FileName );
+					{
+						Cursor = Cursors.WaitCursor;
+						button_scan_dir.BackColor = Color.OrangeRed;
+						button_scan_dir.Enabled = false;
+
+						backgroundWorker_main.RunWorkerAsync();
+					}
 			};
 		}
 
@@ -83,10 +99,16 @@ namespace ZPlateReader
 		{
 			var plate_pic_paths = Directory.GetFiles( root_dir, "*.jpg", SearchOption.AllDirectories );
 
-			Parallel.For( 0, plate_pic_paths.Length, i => readPlate( plate_pic_paths[ i ] ) );
+			if ( plate_pic_paths.Length > 0 )
+			{
+				using ( data_writer = File.AppendText( root_dir + $"\\{( root_dir = Path.GetFileName( root_dir ) )}.csv" ) )
+				{
+					Parallel.For( 0, plate_pic_paths.Length, i => readPlate( plate_pic_paths[ i ], root_dir ) );
+				}
+			}
 		}
 
-		private static void readPlate( string plate_file_path )
+		private static void readPlate( string plate_file_path, string root_dir )
 		{
 			try
 			{
@@ -116,6 +138,10 @@ namespace ZPlateReader
 					var buffer_builder = new StringBuilder( 10000 );
 					int[] size_builder = { 10000 };
 
+					string pic_no = Path.GetFileNameWithoutExtension( plate_file_path ),
+						sub_dir = Path.GetFileName( plate_file_path.Substring( 0, plate_file_path.LastIndexOf( pic_no, StringComparison.OrdinalIgnoreCase ) - 1 ) ),
+						plate = "";
+
 					if ( anprPlateMemoryXML( buffer, size, anpr_options, buffer_builder, size_builder ) == 0 )
 					{
 						using ( var reader = XmlReader.Create( new StringReader( buffer_builder.ToString() ) ) )
@@ -129,15 +155,17 @@ namespace ZPlateReader
 								reader.MoveToFirstAttribute();
 							} // left only the last one
 
-							var plate = ( !string.IsNullOrWhiteSpace( reader.Value )
+							plate = ( !string.IsNullOrWhiteSpace( reader.Value )
 								? reader.Value.Substring( 0, reader.Value.LastIndexOf( ':' ) )
 								: "" ); // read only plate data
-
-							Console.WriteLine( $@"{plate_file_path}, {latinToCyrillic( plate )}, {( plate.Any( chr => chr == '?' ) ? "!" : "" )}" );
 						}
 					}
-					else
-						Console.WriteLine( $@"{plate_file_path}, -," );
+
+					data_writer.WriteLine( $@"{pic_no}|" // pic_number
+											+ $@"{( !string.IsNullOrWhiteSpace( plate ) ? latinToCyrillic( plate ) : "-" )}|"
+											+ $@"{root_dir}|"
+											+ $@"{sub_dir}|"
+											+ $@"{( plate.Any( chr => chr == '?' ) ? "!" : "" )}" ); // if plate has any '?'
 				}
 			}
 			catch ( Exception exception )

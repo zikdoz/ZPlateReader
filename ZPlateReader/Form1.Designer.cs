@@ -29,6 +29,7 @@
 		private void InitializeComponent()
 		{
 			this.button_scan_dir = new System.Windows.Forms.Button();
+			this.backgroundWorker_main = new System.ComponentModel.BackgroundWorker();
 			this.SuspendLayout();
 			// 
 			// button_scan_dir
@@ -38,14 +39,14 @@
 			this.button_scan_dir.Name = "button_scan_dir";
 			this.button_scan_dir.Size = new System.Drawing.Size(208, 73);
 			this.button_scan_dir.TabIndex = 0;
-			this.button_scan_dir.Text = "hit meh";
+			this.button_scan_dir.Text = "Scan dir..";
 			this.button_scan_dir.UseVisualStyleBackColor = true;
 			// 
 			// Form1
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-			this.ClientSize = new System.Drawing.Size(784, 559);
+			this.ClientSize = new System.Drawing.Size(236, 104);
 			this.Controls.Add(this.button_scan_dir);
 			this.Name = "Form1";
 			this.Text = "ZPlateReader";
@@ -55,6 +56,7 @@
 
 		#endregion
 		private System.Windows.Forms.Button button_scan_dir;
+		private System.ComponentModel.BackgroundWorker backgroundWorker_main;
 	}
 }
 
