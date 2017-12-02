@@ -28,16 +28,8 @@
 		/// </summary>
 		private void InitializeComponent()
 		{
-			this.openFileDialog_main = new System.Windows.Forms.OpenFileDialog();
 			this.button_scan_dir = new System.Windows.Forms.Button();
 			this.SuspendLayout();
-			// 
-			// openFileDialog_main
-			// 
-			this.openFileDialog_main.Filter = "Jpeg files (*.jpg)|*.jpg|Bmp files (*.bmp)|*.bmp|Png files (*.png)|*.png|All file" +
-    "s (*.*)|*.*";
-			this.openFileDialog_main.FilterIndex = 4;
-			this.openFileDialog_main.RestoreDirectory = true;
 			// 
 			// button_scan_dir
 			// 
@@ -62,8 +54,6 @@
 		}
 
 		#endregion
-
-		private System.Windows.Forms.OpenFileDialog openFileDialog_main;
 		private System.Windows.Forms.Button button_scan_dir;
 	}
 }

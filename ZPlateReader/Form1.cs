@@ -4,8 +4,10 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
+using Microsoft.WindowsAPICodePack.Dialogs;
 
 #region [ Code Inspection ]
 
@@ -16,7 +18,7 @@ using System.Xml;
 
 // S	TODO: output only the last plate (in case of detecting 1+ plate in the pic)
 // S	TODO: any-case latin -> lowercase cyrillic
-//	TODO: choose root directory and scan all the subdirectories and call "PlateReader" for each file
+// S	TODO: choose a root directory and scan all the subdirectories and call "readPlate" for each file
 //	TODO: save data to the scan_data.csv: pic_no, plate, root_dir, sub_dir\sub_dir2\...
 // S	TODO: if plate has any "?" marks, then append an "!"-mark to the end of the plate
 // S	TODO: if nothing was read - print plate as empty
@@ -41,6 +43,13 @@ namespace ZPlateReader
 			{ "Y", "у" }
 		};
 
+		private static readonly CommonOpenFileDialog _folder_selector = new CommonOpenFileDialog( "Folder scanner." )
+		{
+			IsFolderPicker = true,
+			RestoreDirectory = true,
+			EnsurePathExists = true
+		};
+
 		private struct ANPR_OPTIONS
 		{
 			public int min_plate_size; // Минимальная площадь номера
@@ -62,7 +71,19 @@ namespace ZPlateReader
 		{
 			InitializeComponent();
 
-			button_scan_dir.Click += ( sender, args ) => readPlate( "D:\\1 000.jpg" );
+			button_scan_dir.Click += ( sender, args ) =>
+			{
+				if ( _folder_selector.ShowDialog() == CommonFileDialogResult.Ok )
+					if ( !string.IsNullOrWhiteSpace( _folder_selector.FileName ) )
+						scanDir( _folder_selector.FileName );
+			};
+		}
+
+		private static void scanDir( string root_dir )
+		{
+			var plate_pic_paths = Directory.GetFiles( root_dir, "*.jpg", SearchOption.AllDirectories );
+
+			Parallel.For( 0, plate_pic_paths.Length, i => readPlate( plate_pic_paths[ i ] ) );
 		}
 
 		private static void readPlate( string plate_file_path )
@@ -95,32 +116,35 @@ namespace ZPlateReader
 					var buffer_builder = new StringBuilder( 10000 );
 					int[] size_builder = { 10000 };
 
-					anprPlateMemoryXML( buffer, size, anpr_options, buffer_builder, size_builder );
-
-					using ( var reader = XmlReader.Create( new StringReader( buffer_builder.ToString() ) ) )
+					if ( anprPlateMemoryXML( buffer, size, anpr_options, buffer_builder, size_builder ) == 0 )
 					{
-						reader.ReadToFollowing( "allnumbers" );
-						reader.MoveToFirstAttribute();
-
-						for ( int i = 0, end = int.Parse( reader.Value ); i < end; ++i )
+						using ( var reader = XmlReader.Create( new StringReader( buffer_builder.ToString() ) ) )
 						{
-							reader.ReadToFollowing( "number" );
+							reader.ReadToFollowing( "allnumbers" );
 							reader.MoveToFirstAttribute();
-						} // left only the last one
 
-						var plate = ( !string.IsNullOrWhiteSpace( reader.Value )
-							? reader.Value.Substring( 0, reader.Value.LastIndexOf( ':' ) )
-							: "" ); // read only plate data
-						plate += plate.Any( chr => chr == '?' ) ? "!" : ""; // add "!"-mark if necessarry
+							for ( int i = 0, end = int.Parse( reader.Value ); i < end; ++i )
+							{
+								reader.ReadToFollowing( "number" );
+								reader.MoveToFirstAttribute();
+							} // left only the last one
 
-						Console.WriteLine( plate );
-						Console.WriteLine( latinToCyrillic( plate ) );
+							var plate = ( !string.IsNullOrWhiteSpace( reader.Value )
+								? reader.Value.Substring( 0, reader.Value.LastIndexOf( ':' ) )
+								: "" ); // read only plate data
+
+							Console.WriteLine( $@"{plate_file_path}, {latinToCyrillic( plate )}, {( plate.Any( chr => chr == '?' ) ? "!" : "" )}" );
+						}
 					}
+					else
+						Console.WriteLine( $@"{plate_file_path}, -," );
 				}
 			}
 			catch ( Exception exception )
 			{
-				MessageBox.Show( @"Something reaaaally bad happened with file:" + Environment.NewLine + exception.Message, @".//Error", MessageBoxButtons.OK, MessageBoxIcon.Error );
+				MessageBox.Show( @"Something reaaaally bad happened with file:" + Environment.NewLine
+								+ $@"Path: {plate_file_path}" + Environment.NewLine + Environment.NewLine
+								+ exception.Message + Environment.NewLine, @".//Error", MessageBoxButtons.OK, MessageBoxIcon.Error );
 			}
 		}
 
