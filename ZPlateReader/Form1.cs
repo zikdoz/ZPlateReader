@@ -9,6 +9,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
+using Alea;
+using Alea.Parallel;
 using Microsoft.WindowsAPICodePack.Dialogs;
 
 #region [ Code Inspection ]
@@ -22,7 +24,7 @@ namespace ZPlateReader
 {
 	public partial class Form1 : Form
 	{
-		private static readonly Dictionary< string, string > _latin_converter = new Dictionary< string, string >( StringComparer.OrdinalIgnoreCase )
+		private readonly Dictionary< string, string > _latin_converter = new Dictionary< string, string >( StringComparer.OrdinalIgnoreCase )
 		{
 			{ "A", "а" },
 			{ "B", "б" },
@@ -45,9 +47,11 @@ namespace ZPlateReader
 			EnsurePathExists = true
 		};
 
-		private static StreamWriter data_writer;
-		private static Stopwatch stopwatch_working_time;
-		private static readonly ANPR_OPTIONS anpr_options = new ANPR_OPTIONS
+		[ GpuParam ] private string working_dir;
+		[ GpuParam ] private StreamWriter data_writer;
+		[ GpuParam ] private Stopwatch stopwatch_working_time;
+
+		private readonly ANPR_OPTIONS anpr_options = new ANPR_OPTIONS
 		{
 			Detect_Mode = 14,
 			min_plate_size = 200,
@@ -83,7 +87,12 @@ namespace ZPlateReader
 
 		private void init()
 		{
-			backgroundWorker_main.DoWork += ( sender, args ) => scanDir( _folder_selector.FileName );
+			backgroundWorker_main.DoWork += ( sender, args ) =>
+			{
+				working_dir = _folder_selector.FileName;
+
+				scanDir();
+			};
 
 			backgroundWorker_main.RunWorkerCompleted += ( sender, args ) =>
 			{
@@ -111,23 +120,26 @@ namespace ZPlateReader
 			};
 		}
 
-		private static void scanDir( string root_dir )
+		[ GpuManaged ]
+		private void scanDir()
 		{
-			var plate_pic_paths = Directory.GetFiles( root_dir, "*.jpg", SearchOption.AllDirectories );
+			var plate_pic_paths = Directory.GetFiles( working_dir, "*.jpg", SearchOption.AllDirectories );
 
 			if ( plate_pic_paths.Length > 0 )
 			{
-				using ( data_writer = File.AppendText( root_dir + $"\\{( root_dir = Path.GetFileName( root_dir ) )}.csv" ) )
+				using ( data_writer = File.AppendText( working_dir + $"\\{( working_dir = Path.GetFileName( working_dir ) )}.csv" ) )
 				{
-					Parallel.For( 0, plate_pic_paths.Length, i => readPlate( plate_pic_paths[ i ], root_dir ) );
+//					string test = working_dir;
+					Gpu.Default.For( 0, plate_pic_paths.Length, i => readPlate( plate_pic_paths[ i ]));//, test ) );
 				}
 			}
 		}
 
-		private static void readPlate( string plate_file_path, string root_dir )
+		[ GpuManaged ]
+		private void readPlate( string plate_file_path)//, string root_dir )
 		{
-			try
-			{
+//			try
+//			{
 				using ( var stream = File.OpenRead( plate_file_path ) )
 				{
 					var size = ( int ) stream.Length;
@@ -168,21 +180,21 @@ namespace ZPlateReader
 					}
 
 					data_writer.WriteLine( $@"{pic_no}|" // pic_number
-											+ $@"{( !string.IsNullOrWhiteSpace( plate ) ? latinToCyrillic( plate ) : "-" )}|"
-											+ $@"{root_dir}|"
+											+ $@"{( !string.IsNullOrWhiteSpace( plate ) ? ( plate ) : "-" )}|"
+											+ $@"{working_dir}|"
 											+ $@"{sub_dir}|"
 											+ $@"{( plate.Any( chr => chr == '?' ) ? "!" : "" )}" ); // if plate has any '?'
 				}
-			}
-			catch ( Exception exception )
-			{
-				MessageBox.Show( @"Something reaaaally bad happened with file:" + Environment.NewLine
-								+ $@"Path: {plate_file_path}" + Environment.NewLine + Environment.NewLine
-								+ exception.Message + Environment.NewLine, @".//Error", MessageBoxButtons.OK, MessageBoxIcon.Error );
-			}
+			//}
+//			catch ( Exception exception )
+//			{
+//				MessageBox.Show( @"Something reaaaally bad happened with file:" + Environment.NewLine
+//								+ $@"Path: {plate_file_path}" + Environment.NewLine + Environment.NewLine
+//								+ exception.Message + Environment.NewLine, @".//Error", MessageBoxButtons.OK, MessageBoxIcon.Error );
+//			}
 		}
 
-		private static string latinToCyrillic( string lating_string ) =>
+		private string latinToCyrillic( string lating_string ) =>
 			string.Concat( lating_string.ToUpper()
 				.Select( chr => ( _latin_converter.ContainsKey( chr.ToString() )
 					? _latin_converter[ chr.ToString() ]
