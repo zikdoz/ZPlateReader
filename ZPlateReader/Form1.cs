@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -45,6 +46,7 @@ namespace ZPlateReader
 		};
 
 		private static StreamWriter data_writer;
+		private static Stopwatch working_stopwatch;
 
 		private struct ANPR_OPTIONS
 		{
@@ -79,6 +81,9 @@ namespace ZPlateReader
 				Cursor = Cursors.Default;
 				button_scan_dir.ResetBackColor();
 				button_scan_dir.Enabled = true;
+
+				label_work_time.Text = $@"{working_stopwatch.Elapsed.TotalMilliseconds / 1000.0}s";
+				working_stopwatch.Stop();
 			};
 
 			button_scan_dir.Click += ( sender, args ) =>
@@ -89,6 +94,8 @@ namespace ZPlateReader
 						Cursor = Cursors.WaitCursor;
 						button_scan_dir.BackColor = Color.OrangeRed;
 						button_scan_dir.Enabled = false;
+
+						working_stopwatch = Stopwatch.StartNew();
 
 						backgroundWorker_main.RunWorkerAsync();
 					}
