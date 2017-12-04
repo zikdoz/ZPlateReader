@@ -46,7 +46,16 @@ namespace ZPlateReader
 		};
 
 		private static StreamWriter data_writer;
-		private static Stopwatch working_stopwatch;
+		private static Stopwatch stopwatch_working_time;
+		private static readonly ANPR_OPTIONS anpr_options = new ANPR_OPTIONS
+		{
+			Detect_Mode = 14,
+			min_plate_size = 200,
+			max_plate_size = 25000,
+			max_text_size = 20,
+			type_number = 0,
+			flags = ( 0x02 | 0x04 | 0x08 )
+		};
 
 		private struct ANPR_OPTIONS
 		{
@@ -82,8 +91,8 @@ namespace ZPlateReader
 				button_scan_dir.ResetBackColor();
 				button_scan_dir.Enabled = true;
 
-				label_work_time.Text = $@"{working_stopwatch.Elapsed.TotalMilliseconds / 1000.0}s";
-				working_stopwatch.Stop();
+				label_work_time.Text = $@"{stopwatch_working_time.Elapsed.TotalMilliseconds / 1000.0}s";
+				stopwatch_working_time.Stop();
 			};
 
 			button_scan_dir.Click += ( sender, args ) =>
@@ -95,7 +104,7 @@ namespace ZPlateReader
 						button_scan_dir.BackColor = Color.OrangeRed;
 						button_scan_dir.Enabled = false;
 
-						working_stopwatch = Stopwatch.StartNew();
+						stopwatch_working_time = Stopwatch.StartNew();
 
 						backgroundWorker_main.RunWorkerAsync();
 					}
@@ -131,16 +140,6 @@ namespace ZPlateReader
 						while ( ( temp = stream.Read( buffer, 0, buffer.Length ) ) > 0 )
 							memory_stream.Write( buffer, 0, temp );
 					}
-
-					var anpr_options = new ANPR_OPTIONS
-					{
-						Detect_Mode = 14,
-						min_plate_size = 200,
-						max_plate_size = 25000,
-						max_text_size = 20,
-						type_number = 0,
-						flags = ( 0x02 | 0x04 | 0x08 )
-					};
 
 					var buffer_builder = new StringBuilder( 10000 );
 					int[] size_builder = { 10000 };
