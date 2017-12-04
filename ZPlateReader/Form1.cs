@@ -135,11 +135,11 @@ namespace ZPlateReader
 					var anpr_options = new ANPR_OPTIONS
 					{
 						Detect_Mode = 14,
-						min_plate_size = 500,
+						min_plate_size = 200,
 						max_plate_size = 25000,
 						max_text_size = 20,
 						type_number = 0,
-						flags = 7
+						flags = ( 0x02 | 0x04 | 0x08 )
 					};
 
 					var buffer_builder = new StringBuilder( 10000 );
