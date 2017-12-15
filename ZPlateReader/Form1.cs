@@ -22,6 +22,16 @@ namespace ZPlateReader
 {
 	public partial class Form1 : Form
 	{
+		private struct ANPR_OPTIONS
+		{
+			public int min_plate_size; // Минимальная площадь номера
+			public int max_plate_size; // Максимальная площадь номера
+			public int Detect_Mode; // Режимы детектирования	
+			public int max_text_size; // Максимальное количество символов номера + 1
+			public int type_number; // Тип автомобильного номера	
+			public int flags; // Дополнительные опции
+		};
+
 		private static readonly Dictionary< string, string > _latin_converter = new Dictionary< string, string >( StringComparer.OrdinalIgnoreCase )
 		{
 			{ "A", "а" },
@@ -45,27 +55,10 @@ namespace ZPlateReader
 			EnsurePathExists = true
 		};
 
-		private static StreamWriter data_writer;
-		private static Stopwatch stopwatch_working_time;
-		private static readonly ANPR_OPTIONS anpr_options = new ANPR_OPTIONS
-		{
-			Detect_Mode = 14,
-			min_plate_size = 200,
-			max_plate_size = 25000,
-			max_text_size = 20,
-			type_number = 0,
-			flags = ( 0x02 | 0x04 | 0x08 )
-		};
-
-		private struct ANPR_OPTIONS
-		{
-			public int min_plate_size; // Минимальная площадь номера
-			public int max_plate_size; // Максимальная площадь номера
-			public int Detect_Mode; // Режимы детектирования	
-			public int max_text_size; // Максимальное количество символов номера + 1
-			public int type_number; // Тип автомобильного номера	
-			public int flags; // Дополнительные опции
-		};
+		private static StreamWriter _data_writer;
+		private static Stopwatch _stopwatch_working_time;
+		private static ANPR_OPTIONS _anpr_options;
+		private static int _read_plate_idx;
 
 		[ DllImport( "iANPRinterface_vc12_x64.dll", CallingConvention = CallingConvention.StdCall ) ]
 		private static extern int anprPlateMemoryXML( byte[] in_buffer,
@@ -91,8 +84,8 @@ namespace ZPlateReader
 				button_scan_dir.ResetBackColor();
 				button_scan_dir.Enabled = true;
 
-				label_work_time.Text = $@"{stopwatch_working_time.Elapsed.TotalMilliseconds / 1000.0}s";
-				stopwatch_working_time.Stop();
+				label_work_time.Text = $@"{_stopwatch_working_time.Elapsed.TotalMilliseconds / 1000.0}s";
+				_stopwatch_working_time.Stop();
 			};
 
 			button_scan_dir.Click += ( sender, args ) =>
@@ -104,7 +97,15 @@ namespace ZPlateReader
 						button_scan_dir.BackColor = Color.OrangeRed;
 						button_scan_dir.Enabled = false;
 
-						stopwatch_working_time = Stopwatch.StartNew();
+						int.TryParse( textbox_plate_idx.Text, out _read_plate_idx );
+						int.TryParse( textbox_detect_mode.Text, out _anpr_options.Detect_Mode );
+						int.TryParse( textbox_min_size.Text, out _anpr_options.min_plate_size );
+						int.TryParse( textbox_max_size.Text, out _anpr_options.max_plate_size );
+						int.TryParse( textbox_max_text_size.Text, out _anpr_options.max_text_size );
+						int.TryParse( textbox_type_number.Text, out _anpr_options.type_number );
+						_anpr_options.flags = ( checkbox_detect_all_plates.Checked ) ? 1 : 0;
+
+						_stopwatch_working_time = Stopwatch.StartNew();
 
 						backgroundWorker_main.RunWorkerAsync();
 					}
@@ -117,9 +118,11 @@ namespace ZPlateReader
 
 			if ( plate_pic_paths.Length > 0 )
 			{
-				using ( data_writer = File.AppendText( root_dir + $"\\{( root_dir = Path.GetFileName( root_dir ) )}.csv" ) )
+				using ( _data_writer = File.AppendText( root_dir + $"\\{( root_dir = Path.GetFileName( root_dir ) )}.csv" ) )
 				{
 					Parallel.For( 0, plate_pic_paths.Length, i => readPlate( plate_pic_paths[ i ], root_dir ) );
+//					for ( int i = 0, end = plate_pic_paths.Length; i < end; ++i )
+//						readPlate( plate_pic_paths[ i ], root_dir );
 				}
 			}
 		}
@@ -148,26 +151,27 @@ namespace ZPlateReader
 						sub_dir = Path.GetFileName( plate_file_path.Substring( 0, plate_file_path.LastIndexOf( pic_no, StringComparison.OrdinalIgnoreCase ) - 1 ) ),
 						plate = "";
 
-					if ( anprPlateMemoryXML( buffer, size, anpr_options, buffer_builder, size_builder ) == 0 )
+					if ( anprPlateMemoryXML( buffer, size, _anpr_options, buffer_builder, size_builder ) == 0 )
 					{
 						using ( var reader = XmlReader.Create( new StringReader( buffer_builder.ToString() ) ) )
 						{
 							reader.ReadToFollowing( "allnumbers" );
 							reader.MoveToFirstAttribute();
 
-							for ( int i = 0, end = int.Parse( reader.Value ); i < end; ++i )
+							for ( int i = 0, end = Math.Min( int.Parse( reader.Value ), _read_plate_idx ); i < end; ++i )
 							{
 								reader.ReadToFollowing( "number" );
 								reader.MoveToFirstAttribute();
 							} // left only the last one
 
 							plate = ( !string.IsNullOrWhiteSpace( reader.Value )
+									&& ( reader.Value.LastIndexOf( ':' ) >= 0 )
 								? reader.Value.Substring( 0, reader.Value.LastIndexOf( ':' ) )
-								: "" ); // read only plate data
+								: reader.Value ); // read only plate data
 						}
 					}
 
-					data_writer.WriteLine( $@"{pic_no}|" // pic_number
+					_data_writer.WriteLine( $@"{pic_no}|" // pic_number
 											+ $@"{( !string.IsNullOrWhiteSpace( plate ) ? latinToCyrillic( plate ) : "-" )}|"
 											+ $@"{root_dir}|"
 											+ $@"{sub_dir}|"
